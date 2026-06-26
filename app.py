@@ -316,60 +316,63 @@ SKILLS = [
     "loan processing", "risk assessment",
 ]
 
-
 # ============================================================
 # LOAD DATASET
 # ============================================================
 @st.cache_data
 def load_resume_dataset():
     possible_files = [
-        "cleaned_resume_data.csv",
         "cleaned_resume_data (1).csv",
-        "Resume_clean.csv",
-        "Resume.csv",
     ]
-
-    selected_file = None
 
     for file in possible_files:
         if os.path.exists(file):
-            selected_file = file
-            break
 
-    if selected_file is None:
-        st.error(
-            "Dataset file not found. Please make sure cleaned_resume_data.csv "
-            "is in the same folder as app.py."
-        )
-        return pd.DataFrame(columns=["Resume_str", "Category"])
+            # Check if file is empty
+            if os.path.getsize(file) == 0:
+                st.warning(f"{file} exists but is empty. Skipping this file.")
+                continue
 
-    try:
-        df = pd.read_csv(
-            selected_file,
-            encoding="utf-8",
-            encoding_errors="ignore",
-            on_bad_lines="skip",
-            engine="python",
-        )
-    except Exception as e:
-        st.error(f"Error reading dataset file: {selected_file}")
-        st.exception(e)
-        return pd.DataFrame(columns=["Resume_str", "Category"])
+            try:
+                df = pd.read_csv(
+                    file,
+                    encoding="utf-8",
+                    encoding_errors="ignore",
+                    on_bad_lines="skip"
+                )
 
-    df.columns = df.columns.str.strip()
+            except pd.errors.EmptyDataError:
+                st.warning(f"{file} has no readable data. Skipping this file.")
+                continue
 
-    if "Resume_str" not in df.columns or "Category" not in df.columns:
-        st.error(
-            f"{selected_file} found, but it must contain 'Resume_str' and 'Category' columns."
-        )
-        st.write("Available columns:", df.columns.tolist())
-        return pd.DataFrame(columns=["Resume_str", "Category"])
+            except Exception as e:
+                st.error(f"Error reading file: {file}")
+                st.exception(e)
+                continue
 
-    df = df[["Resume_str", "Category"]].dropna()
-    df["Resume_str"] = df["Resume_str"].astype(str)
-    df["Category"] = df["Category"].astype(str).str.upper().str.strip()
+            # Clean column names
+            df.columns = df.columns.str.strip()
 
-    return df
+            # Show detected file and columns
+            st.sidebar.success(f"Dataset loaded: {file}")
+
+            if "Resume_str" not in df.columns or "Category" not in df.columns:
+                st.error(
+                    f"{file} found, but it must contain 'Resume_str' and 'Category' columns."
+                )
+                st.write("Available columns:", df.columns.tolist())
+                return pd.DataFrame(columns=["Resume_str", "Category"])
+
+            df = df[["Resume_str", "Category"]].dropna()
+            df["Resume_str"] = df["Resume_str"].astype(str)
+            df["Category"] = df["Category"].astype(str).str.upper().str.strip()
+
+            return df
+
+    st.error(
+        "No valid dataset found. Please upload a non-empty CSV file named cleaned_resume_data.csv."
+    )
+    return pd.DataFrame(columns=["Resume_str", "Category"])
 
 
 # ============================================================
