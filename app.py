@@ -14,7 +14,13 @@ from nltk.stem import WordNetLemmatizer
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+)
 
 
 # ============================================================
@@ -47,7 +53,7 @@ st.set_page_config(
     page_title="ResumeFit - NLP Resume Matcher",
     page_icon="📄",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 
@@ -68,15 +74,6 @@ st.markdown(
         font-size: 18px;
         color: #6b7280;
         margin-bottom: 25px;
-    }
-
-    .card {
-        padding: 22px;
-        border-radius: 16px;
-        background-color: #ffffff;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.04);
-        margin-bottom: 18px;
     }
 
     .skill-pill {
@@ -111,16 +108,9 @@ st.markdown(
         font-size: 14px;
         border: 1px solid #bfdbfe;
     }
-
-    .score-box {
-        padding: 18px;
-        border-radius: 14px;
-        background-color: #f9fafb;
-        border: 1px solid #e5e7eb;
-    }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 
@@ -272,7 +262,7 @@ JOB_DESCRIPTIONS = {
     We are looking for a BPO candidate with experience in customer support,
     call center operations, communication, data entry, client handling,
     service quality, problem solving, and process documentation.
-    """
+    """,
 }
 
 
@@ -280,7 +270,6 @@ JOB_DESCRIPTIONS = {
 # SKILL DICTIONARY
 # ============================================================
 SKILLS = [
-    # IT / Software
     "python", "java", "sql", "mysql", "html", "css", "javascript",
     "react", "node", "nodejs", "php", "firebase", "api", "database",
     "web development", "software development", "programming",
@@ -290,50 +279,41 @@ SKILLS = [
     "data visualization", "power bi", "excel", "tableau",
     "tensorflow", "scikit learn", "streamlit", "flask", "django",
 
-    # Soft skills
     "communication", "teamwork", "leadership", "problem solving",
     "project management", "time management", "critical thinking",
     "customer service", "training", "documentation", "reporting",
     "presentation", "planning", "coordination", "management",
 
-    # HR
     "recruitment", "payroll", "employee relations", "onboarding",
     "performance management", "hr policies", "staff records",
     "human resource", "administration",
 
-    # Accounting / Finance
     "accounting", "bookkeeping", "auditing", "taxation", "budgeting",
     "financial analysis", "bank reconciliation", "accounts payable",
     "accounts receivable", "financial reporting", "finance",
 
-    # Business / Sales / Marketing
     "sales", "marketing", "negotiation", "lead generation",
     "business development", "market research", "client relationship",
     "social media", "digital marketing", "content creation",
     "branding", "customer relationship",
 
-    # Design / Media
     "graphic design", "photoshop", "illustrator", "typography",
     "layout design", "ui design", "video editing", "creative",
 
-    # Education
     "teaching", "lesson planning", "classroom management",
     "student assessment", "curriculum development", "education",
 
-    # Healthcare
     "patient care", "medical records", "clinical support",
     "healthcare administration", "health assessment",
 
-    # Engineering / Manufacturing
     "quality control", "maintenance", "manufacturing", "safety",
     "engineering analysis", "technical design", "process improvement",
     "production", "mechanical", "electrical", "construction",
 
-    # Chef / Fitness / Others
     "food safety", "cooking", "menu planning", "kitchen operations",
     "personal training", "fitness assessment", "health coaching",
     "legal research", "compliance", "litigation", "banking operations",
-    "loan processing", "risk assessment"
+    "loan processing", "risk assessment",
 ]
 
 
@@ -342,23 +322,55 @@ SKILLS = [
 # ============================================================
 @st.cache_data
 def load_resume_dataset():
-    possible_files = ["cleaned_resume_data.csv", "Resume_clean.csv", "Resume.csv"]
+    possible_files = [
+        "cleaned_resume_data.csv",
+        "cleaned_resume_data (1).csv",
+        "Resume_sample.csv",
+        "Resume_clean.csv",
+        "Resume.csv",
+    ]
+
+    selected_file = None
 
     for file in possible_files:
         if os.path.exists(file):
-            df = pd.read_csv(file)
+            selected_file = file
+            break
 
-            if "Resume_str" not in df.columns or "Category" not in df.columns:
-                st.error("Dataset must contain Resume_str and Category columns.")
-                return pd.DataFrame(columns=["Resume_str", "Category"])
+    if selected_file is None:
+        st.error(
+            "Dataset file not found. Please make sure cleaned_resume_data.csv "
+            "is in the same folder as app.py."
+        )
+        return pd.DataFrame(columns=["Resume_str", "Category"])
 
-            df = df[["Resume_str", "Category"]].dropna()
-            df["Resume_str"] = df["Resume_str"].astype(str)
-            df["Category"] = df["Category"].astype(str).str.upper().str.strip()
+    try:
+        df = pd.read_csv(
+            selected_file,
+            encoding="utf-8",
+            encoding_errors="ignore",
+            on_bad_lines="skip",
+            engine="python",
+        )
+    except Exception as e:
+        st.error(f"Error reading dataset file: {selected_file}")
+        st.exception(e)
+        return pd.DataFrame(columns=["Resume_str", "Category"])
 
-            return df
+    df.columns = df.columns.str.strip()
 
-    return pd.DataFrame(columns=["Resume_str", "Category"])
+    if "Resume_str" not in df.columns or "Category" not in df.columns:
+        st.error(
+            f"{selected_file} found, but it must contain 'Resume_str' and 'Category' columns."
+        )
+        st.write("Available columns:", df.columns.tolist())
+        return pd.DataFrame(columns=["Resume_str", "Category"])
+
+    df = df[["Resume_str", "Category"]].dropna()
+    df["Resume_str"] = df["Resume_str"].astype(str)
+    df["Category"] = df["Category"].astype(str).str.upper().str.strip()
+
+    return df
 
 
 # ============================================================
@@ -367,10 +379,10 @@ def load_resume_dataset():
 def get_stop_words():
     try:
         return set(stopwords.words("english"))
-    except:
+    except Exception:
         return {
             "the", "and", "is", "in", "to", "of", "for", "a", "an",
-            "with", "on", "at", "by", "from", "this", "that", "are"
+            "with", "on", "at", "by", "from", "this", "that", "are",
         }
 
 
@@ -404,16 +416,6 @@ def normalize_special_terms(text):
 
 
 def preprocess_text(text):
-    """
-    NLP preprocessing:
-    1. Lowercasing
-    2. Special term normalization
-    3. Remove URLs/emails/numbers/punctuation
-    4. Tokenization using regex
-    5. Stopword removal
-    6. Lemmatization using NLTK WordNetLemmatizer
-    """
-
     text = normalize_special_terms(text)
     text = re.sub(r"http\S+|www\S+", " ", text)
     text = re.sub(r"\S+@\S+", " ", text)
@@ -481,14 +483,14 @@ def build_vectorizers(corpus):
         analyzer="word",
         ngram_range=(1, 2),
         max_features=8000,
-        min_df=1
+        min_df=1,
     )
 
     char_vectorizer = TfidfVectorizer(
         analyzer="char_wb",
         ngram_range=(3, 5),
         max_features=5000,
-        min_df=1
+        min_df=1,
     )
 
     word_vectorizer.fit(processed_corpus)
@@ -541,7 +543,7 @@ def calculate_final_score(resume_text, job_text, word_vectorizer, char_vectorize
         "final_score": round(final_score, 2),
         "word_score": word_score,
         "char_score": char_score,
-        "skill_score": skill_score
+        "skill_score": skill_score,
     }
 
 
@@ -607,8 +609,8 @@ page = st.sidebar.radio(
         "Resume Matcher",
         "Dataset Explorer",
         "Evaluation",
-        "About Project"
-    ]
+        "About Project",
+    ],
 )
 
 
@@ -619,7 +621,7 @@ if page == "Home":
     st.markdown("<h1 class='main-title'>📄 ResumeFit</h1>", unsafe_allow_html=True)
     st.markdown(
         "<p class='subtitle'>An NLP-Based Resume Screening and Job Matching System</p>",
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     st.markdown("### Project Overview")
@@ -674,7 +676,7 @@ Final Matching Score
         ↓
 Suitability Level + Recommendation
         """,
-        language="text"
+        language="text",
     )
 
 
@@ -685,22 +687,19 @@ elif page == "Resume Matcher":
     st.markdown("<h1 class='main-title'>🔍 Resume Matcher</h1>", unsafe_allow_html=True)
     st.markdown(
         "<p class='subtitle'>Upload or paste a resume, then compare it with a job description.</p>",
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     resume_input_method = st.radio(
         "Choose Resume Input Method",
         ["Upload Resume PDF", "Paste Resume Text", "Use Sample Resume from Dataset"],
-        horizontal=True
+        horizontal=True,
     )
 
     resume_text = ""
 
     if resume_input_method == "Upload Resume PDF":
-        uploaded_resume = st.file_uploader(
-            "Upload Resume PDF",
-            type=["pdf"]
-        )
+        uploaded_resume = st.file_uploader("Upload Resume PDF", type=["pdf"])
 
         if uploaded_resume is not None:
             resume_text = extract_text_from_pdf(uploaded_resume)
@@ -719,16 +718,16 @@ elif page == "Resume Matcher":
         resume_text = st.text_area(
             "Paste Resume Text",
             height=280,
-            placeholder="Paste candidate resume text here..."
+            placeholder="Paste candidate resume text here...",
         )
 
     else:
         if df.empty:
-            st.error("Resume_sample.csv not found or empty.")
+            st.error("cleaned_resume_data.csv not found or empty.")
         else:
             selected_category = st.selectbox(
                 "Select Resume Category",
-                sorted(df["Category"].unique())
+                sorted(df["Category"].unique()),
             )
 
             sample_df = df[df["Category"] == selected_category].reset_index(drop=True)
@@ -738,7 +737,7 @@ elif page == "Resume Matcher":
                 min_value=0,
                 max_value=max(len(sample_df) - 1, 0),
                 value=0,
-                step=1
+                step=1,
             )
 
             resume_text = sample_df.loc[sample_index, "Resume_str"]
@@ -751,7 +750,7 @@ elif page == "Resume Matcher":
     job_input_method = st.radio(
         "Choose Job Description Input Method",
         ["Use Job Template", "Paste Job Description"],
-        horizontal=True
+        horizontal=True,
     )
 
     job_text = ""
@@ -759,7 +758,7 @@ elif page == "Resume Matcher":
     if job_input_method == "Use Job Template":
         selected_job = st.selectbox(
             "Select Job Category",
-            sorted(JOB_DESCRIPTIONS.keys())
+            sorted(JOB_DESCRIPTIONS.keys()),
         )
 
         job_text = JOB_DESCRIPTIONS[selected_job]
@@ -771,7 +770,7 @@ elif page == "Resume Matcher":
         job_text = st.text_area(
             "Paste Job Description",
             height=260,
-            placeholder="Paste job description here..."
+            placeholder="Paste job description here...",
         )
 
     st.markdown("---")
@@ -784,7 +783,7 @@ elif page == "Resume Matcher":
                 resume_text,
                 job_text,
                 word_vectorizer,
-                char_vectorizer
+                char_vectorizer,
             )
 
             final_score = scores["final_score"]
@@ -830,28 +829,30 @@ elif page == "Resume Matcher":
             st.markdown("### Recommendation")
             st.info(recommendation)
 
-            result_df = pd.DataFrame({
-                "Item": [
-                    "Final Match Score",
-                    "Word TF-IDF Score",
-                    "Character TF-IDF Score",
-                    "Skill Match Score",
-                    "Suitability Level",
-                    "Matched Skills",
-                    "Missing Skills",
-                    "Recommendation"
-                ],
-                "Result": [
-                    f"{final_score}%",
-                    f"{word_score}%",
-                    f"{char_score}%",
-                    f"{skill_score}%",
-                    level,
-                    ", ".join(matched_skills) if matched_skills else "None",
-                    ", ".join(missing_skills) if missing_skills else "None",
-                    recommendation
-                ]
-            })
+            result_df = pd.DataFrame(
+                {
+                    "Item": [
+                        "Final Match Score",
+                        "Word TF-IDF Score",
+                        "Character TF-IDF Score",
+                        "Skill Match Score",
+                        "Suitability Level",
+                        "Matched Skills",
+                        "Missing Skills",
+                        "Recommendation",
+                    ],
+                    "Result": [
+                        f"{final_score}%",
+                        f"{word_score}%",
+                        f"{char_score}%",
+                        f"{skill_score}%",
+                        level,
+                        ", ".join(matched_skills) if matched_skills else "None",
+                        ", ".join(missing_skills) if missing_skills else "None",
+                        recommendation,
+                    ],
+                }
+            )
 
             csv = result_df.to_csv(index=False).encode("utf-8")
 
@@ -860,7 +861,7 @@ elif page == "Resume Matcher":
                 data=csv,
                 file_name="resume_match_result.csv",
                 mime="text/csv",
-                use_container_width=True
+                use_container_width=True,
             )
 
 
@@ -871,11 +872,13 @@ elif page == "Dataset Explorer":
     st.markdown("<h1 class='main-title'>📁 Dataset Explorer</h1>", unsafe_allow_html=True)
     st.markdown(
         "<p class='subtitle'>View and understand the resume dataset used in this project.</p>",
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     if df.empty:
-        st.error("Resume_sample.csv not found. Please place Resume_sample.csv in the same folder as app.py.")
+        st.error(
+            "cleaned_resume_data.csv not found. Please place cleaned_resume_data.csv in the same folder as app.py."
+        )
     else:
         col1, col2, col3 = st.columns(3)
 
@@ -902,7 +905,7 @@ elif page == "Dataset Explorer":
 
         selected_category = st.selectbox(
             "Filter by Category",
-            ["All"] + sorted(df["Category"].unique())
+            ["All"] + sorted(df["Category"].unique()),
         )
 
         if selected_category == "All":
@@ -917,7 +920,7 @@ elif page == "Dataset Explorer":
                 st.text_area(
                     "Resume Text",
                     preview_df.iloc[0]["Resume_str"],
-                    height=300
+                    height=300,
                 )
 
 
@@ -928,11 +931,13 @@ elif page == "Evaluation":
     st.markdown("<h1 class='main-title'>📊 Model Evaluation</h1>", unsafe_allow_html=True)
     st.markdown(
         "<p class='subtitle'>Evaluate the matching model using resume categories and job description templates.</p>",
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     if df.empty:
-        st.error("Resume_sample.csv not found. Please place Resume_sample.csv in the same folder as app.py.")
+        st.error(
+            "cleaned_resume_data.csv not found. Please place cleaned_resume_data.csv in the same folder as app.py."
+        )
     else:
         st.write(
             """
@@ -942,171 +947,186 @@ elif page == "Evaluation":
             """
         )
 
-        available_categories = sorted(list(set(df["Category"].unique()) & set(JOB_DESCRIPTIONS.keys())))
-
-        selected_eval_category = st.selectbox(
-            "Select Job Category for Evaluation",
-            available_categories,
-            index=available_categories.index("INFORMATION-TECHNOLOGY")
-            if "INFORMATION-TECHNOLOGY" in available_categories else 0
+        available_categories = sorted(
+            list(set(df["Category"].unique()) & set(JOB_DESCRIPTIONS.keys()))
         )
 
-        sample_size = st.slider(
-            "Number of resumes to evaluate",
-            min_value=20,
-            max_value=300,
-            value=100,
-            step=20
-        )
-
-        threshold = st.slider(
-            "Match Threshold (%)",
-            min_value=10,
-            max_value=80,
-            value=25,
-            step=5
-        )
-
-        if st.button("Run Evaluation", use_container_width=True):
-            positive_df = df[df["Category"] == selected_eval_category].copy()
-            negative_df = df[df["Category"] != selected_eval_category].copy()
-
-            half_size = sample_size // 2
-
-            positive_sample = positive_df.sample(
-                n=min(half_size, len(positive_df)),
-                random_state=42
+        if not available_categories:
+            st.error(
+                "No matching categories found between dataset Category and job templates."
+            )
+        else:
+            selected_eval_category = st.selectbox(
+                "Select Job Category for Evaluation",
+                available_categories,
+                index=available_categories.index("INFORMATION-TECHNOLOGY")
+                if "INFORMATION-TECHNOLOGY" in available_categories
+                else 0,
             )
 
-            negative_sample = negative_df.sample(
-                n=min(sample_size - len(positive_sample), len(negative_df)),
-                random_state=42
+            sample_size = st.slider(
+                "Number of resumes to evaluate",
+                min_value=20,
+                max_value=300,
+                value=100,
+                step=20,
             )
 
-            eval_df = pd.concat([positive_sample, negative_sample], ignore_index=True)
+            threshold = st.slider(
+                "Match Threshold (%)",
+                min_value=10,
+                max_value=80,
+                value=25,
+                step=5,
+            )
 
-            job_text = JOB_DESCRIPTIONS[selected_eval_category]
+            if st.button("Run Evaluation", use_container_width=True):
+                positive_df = df[df["Category"] == selected_eval_category].copy()
+                negative_df = df[df["Category"] != selected_eval_category].copy()
 
-            scores = []
-            actual_labels = []
-            predicted_labels = []
-            word_scores = []
-            char_scores = []
-            skill_scores = []
+                half_size = sample_size // 2
 
-            for _, row in eval_df.iterrows():
-                score_result = calculate_final_score(
-                    row["Resume_str"],
-                    job_text,
-                    word_vectorizer,
-                    char_vectorizer
+                positive_sample = positive_df.sample(
+                    n=min(half_size, len(positive_df)),
+                    random_state=42,
                 )
 
-                final_score = score_result["final_score"]
+                negative_sample = negative_df.sample(
+                    n=min(sample_size - len(positive_sample), len(negative_df)),
+                    random_state=42,
+                )
 
-                scores.append(final_score)
-                word_scores.append(score_result["word_score"])
-                char_scores.append(score_result["char_score"])
-                skill_scores.append(score_result["skill_score"])
+                eval_df = pd.concat(
+                    [positive_sample, negative_sample],
+                    ignore_index=True,
+                )
 
-                actual = "Match" if row["Category"] == selected_eval_category else "Not Match"
-                predicted = predict_match(final_score, threshold)
+                job_text = JOB_DESCRIPTIONS[selected_eval_category]
 
-                actual_labels.append(actual)
-                predicted_labels.append(predicted)
+                scores = []
+                actual_labels = []
+                predicted_labels = []
+                word_scores = []
+                char_scores = []
+                skill_scores = []
 
-            eval_df["Final Score (%)"] = scores
-            eval_df["Word TF-IDF Score (%)"] = word_scores
-            eval_df["Character TF-IDF Score (%)"] = char_scores
-            eval_df["Skill Match Score (%)"] = skill_scores
-            eval_df["Actual Label"] = actual_labels
-            eval_df["Predicted Label"] = predicted_labels
+                for _, row in eval_df.iterrows():
+                    score_result = calculate_final_score(
+                        row["Resume_str"],
+                        job_text,
+                        word_vectorizer,
+                        char_vectorizer,
+                    )
 
-            accuracy = accuracy_score(actual_labels, predicted_labels)
-            precision = precision_score(
-                actual_labels,
-                predicted_labels,
-                pos_label="Match",
-                zero_division=0
-            )
-            recall = recall_score(
-                actual_labels,
-                predicted_labels,
-                pos_label="Match",
-                zero_division=0
-            )
-            f1 = f1_score(
-                actual_labels,
-                predicted_labels,
-                pos_label="Match",
-                zero_division=0
-            )
+                    final_score = score_result["final_score"]
 
-            col1, col2, col3, col4 = st.columns(4)
+                    scores.append(final_score)
+                    word_scores.append(score_result["word_score"])
+                    char_scores.append(score_result["char_score"])
+                    skill_scores.append(score_result["skill_score"])
 
-            col1.metric("Accuracy", f"{accuracy * 100:.2f}%")
-            col2.metric("Precision", f"{precision * 100:.2f}%")
-            col3.metric("Recall", f"{recall * 100:.2f}%")
-            col4.metric("F1-Score", f"{f1 * 100:.2f}%")
+                    actual = (
+                        "Match"
+                        if row["Category"] == selected_eval_category
+                        else "Not Match"
+                    )
+                    predicted = predict_match(final_score, threshold)
 
-            st.markdown("### Evaluation Metrics Chart")
+                    actual_labels.append(actual)
+                    predicted_labels.append(predicted)
 
-            metrics = {
-                "Accuracy": accuracy,
-                "Precision": precision,
-                "Recall": recall,
-                "F1-Score": f1
-            }
+                eval_df["Final Score (%)"] = scores
+                eval_df["Word TF-IDF Score (%)"] = word_scores
+                eval_df["Character TF-IDF Score (%)"] = char_scores
+                eval_df["Skill Match Score (%)"] = skill_scores
+                eval_df["Actual Label"] = actual_labels
+                eval_df["Predicted Label"] = predicted_labels
 
-            fig, ax = plt.subplots(figsize=(7, 4))
-            ax.bar(metrics.keys(), metrics.values())
-            ax.set_ylim(0, 1)
-            ax.set_ylabel("Score")
-            ax.set_title("Evaluation Metrics")
-            st.pyplot(fig)
+                accuracy = accuracy_score(actual_labels, predicted_labels)
+                precision = precision_score(
+                    actual_labels,
+                    predicted_labels,
+                    pos_label="Match",
+                    zero_division=0,
+                )
+                recall = recall_score(
+                    actual_labels,
+                    predicted_labels,
+                    pos_label="Match",
+                    zero_division=0,
+                )
+                f1 = f1_score(
+                    actual_labels,
+                    predicted_labels,
+                    pos_label="Match",
+                    zero_division=0,
+                )
 
-            st.markdown("### Confusion Matrix")
+                col1, col2, col3, col4 = st.columns(4)
 
-            cm = confusion_matrix(
-                actual_labels,
-                predicted_labels,
-                labels=["Match", "Not Match"]
-            )
+                col1.metric("Accuracy", f"{accuracy * 100:.2f}%")
+                col2.metric("Precision", f"{precision * 100:.2f}%")
+                col3.metric("Recall", f"{recall * 100:.2f}%")
+                col4.metric("F1-Score", f"{f1 * 100:.2f}%")
 
-            cm_df = pd.DataFrame(
-                cm,
-                index=["Actual Match", "Actual Not Match"],
-                columns=["Predicted Match", "Predicted Not Match"]
-            )
+                st.markdown("### Evaluation Metrics Chart")
 
-            st.dataframe(cm_df, use_container_width=True)
+                metrics = {
+                    "Accuracy": accuracy,
+                    "Precision": precision,
+                    "Recall": recall,
+                    "F1-Score": f1,
+                }
 
-            st.markdown("### Prediction Result Table")
+                fig, ax = plt.subplots(figsize=(7, 4))
+                ax.bar(metrics.keys(), metrics.values())
+                ax.set_ylim(0, 1)
+                ax.set_ylabel("Score")
+                ax.set_title("Evaluation Metrics")
+                st.pyplot(fig)
 
-            show_df = eval_df[
-                [
-                    "Category",
-                    "Final Score (%)",
-                    "Word TF-IDF Score (%)",
-                    "Character TF-IDF Score (%)",
-                    "Skill Match Score (%)",
-                    "Actual Label",
-                    "Predicted Label",
-                    "Resume_str"
+                st.markdown("### Confusion Matrix")
+
+                cm = confusion_matrix(
+                    actual_labels,
+                    predicted_labels,
+                    labels=["Match", "Not Match"],
+                )
+
+                cm_df = pd.DataFrame(
+                    cm,
+                    index=["Actual Match", "Actual Not Match"],
+                    columns=["Predicted Match", "Predicted Not Match"],
+                )
+
+                st.dataframe(cm_df, use_container_width=True)
+
+                st.markdown("### Prediction Result Table")
+
+                show_df = eval_df[
+                    [
+                        "Category",
+                        "Final Score (%)",
+                        "Word TF-IDF Score (%)",
+                        "Character TF-IDF Score (%)",
+                        "Skill Match Score (%)",
+                        "Actual Label",
+                        "Predicted Label",
+                        "Resume_str",
+                    ]
                 ]
-            ]
 
-            st.dataframe(show_df, use_container_width=True)
+                st.dataframe(show_df, use_container_width=True)
 
-            csv = show_df.to_csv(index=False).encode("utf-8")
+                csv = show_df.to_csv(index=False).encode("utf-8")
 
-            st.download_button(
-                "Download Evaluation Result as CSV",
-                data=csv,
-                file_name="evaluation_result.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
+                st.download_button(
+                    "Download Evaluation Result as CSV",
+                    data=csv,
+                    file_name="evaluation_result.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
 
 
 # ============================================================
@@ -1140,7 +1160,7 @@ elif page == "About Project":
     st.markdown("### Dataset")
     st.write(
         """
-        The dataset used in this project is `Resume_sample.csv`, which contains resume text 
+        The dataset used in this project is `cleaned_resume_data.csv`, which contains resume text 
         and job category labels. The main text column used for NLP processing is `Resume_str`, 
         while the `Category` column is used for evaluation.
         """
@@ -1165,7 +1185,7 @@ Final Score =
 + (0.25 × Character TF-IDF Score)
 + (0.25 × Skill Match Score)
         """,
-        language="text"
+        language="text",
     )
 
     st.markdown("### Tools and Libraries")
