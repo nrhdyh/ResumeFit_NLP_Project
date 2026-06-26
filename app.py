@@ -325,7 +325,6 @@ def load_resume_dataset():
     possible_files = [
         "cleaned_resume_data.csv",
         "cleaned_resume_data (1).csv",
-        "Resume_sample.csv",
         "Resume_clean.csv",
         "Resume.csv",
     ]
