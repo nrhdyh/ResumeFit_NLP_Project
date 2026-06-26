@@ -342,7 +342,7 @@ SKILLS = [
 # ============================================================
 @st.cache_data
 def load_resume_dataset():
-    possible_files = ["Resume_sample.csv", "Resume_clean.csv", "Resume.csv"]
+    possible_files = ["cleaned_resume_data.csv", "Resume_clean.csv", "Resume.csv"]
 
     for file in possible_files:
         if os.path.exists(file):
